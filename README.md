@@ -1,5 +1,5 @@
 ## Hi there 👋
-
+An open source framework for building AI-powered apps with familiar code-centric patterns. Genkit makes it easy to develop, integrate, and test AI features with observability and evaluations. Genkit works with various models and platforms
 <!--
 **Horlabrainmoore/Horlabrainmoore** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
 
