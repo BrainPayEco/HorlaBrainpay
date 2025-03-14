@@ -1,0 +1,16 @@
+# These are supported funding model platforms
+
+github: ["Horlabrainmoore"]
+patreon: your-patreon-username
+open_collective: your-open-collective-username
+ko_fi: your-kofi-username
+buy_me_a_coffee: your-buymeacoffee-username
+custom:
+  - "bitcoin:your-btc-wallet-address"
+  - "ethereum:your-eth-wallet-address"
+  - "binance:your-bnb-wallet-address"
+  - "polygon:your-matic-wallet-address"
+  - "https://your-brainpay-donation-link.com"
+  - "https://opensea.io/your-nft-funding"
+  - "https://snapshot.org/#/brainpay-dao.eth"  # BrainPay DAO Governance
+  - "https://gitcoin.co/grants/your-project"  # Gitcoin Web3 Grant
