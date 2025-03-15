@@ -1,0 +1,179 @@
+import tensorflow as tf
+import numpy as np
+import pandas as pd
+from flask import Flask, request, jsonify, abort
+from flask_cors import CORS  # Import CORS
+import requests
+import sqlite3
+import os
+import time
+import logging
+
+# --- Logging Setup ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
+
+# --- Database Setup ---
+DATABASE_PATH = 'transactions.db'
+
+def init_db():
+    with sqlite3.connect(DATABASE_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS transactions (
+                txid TEXT PRIMARY KEY,
+                chain TEXT,
+                amount REAL,
+                fee REAL,
+                risk_score REAL,
+                risk_label TEXT,
+                timestamp INTEGER
+            )
+        ''')
+        conn.commit()
+
+init_db()
+
+# --- Model Loading and Training ---
+MODEL_PATH = 'fraud_detection_model.h5'
+
+def load_or_train_model():
+    if os.path.exists(MODEL_PATH):
+        model = tf.keras.models.load_model(MODEL_PATH)
+        logging.info("✅ Loaded existing AI model.")
+    else:
+        logging.info("⚠️ No existing model found.  Need to train with real data.")
+        # You *must* implement a proper training process with real data here.
+        # This is just a placeholder to prevent errors.
+        model = tf.keras.models.Sequential([
+            tf.keras.layers.Dense(10, activation="relu", input_shape=(2,)),
+            tf.keras.layers.Dense(5, activation="relu"),
+            tf.keras.layers.Dense(1, activation="sigmoid")
+        ])
+        model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
+        #  Dummy data for model creation (replace with real training logic)
+        X = np.array([[0.1, 0.001], [10, 0.01]])
+        y = np.array([0, 1])
+        model.fit(X, y, epochs=1, verbose=0) # Short training
+        model.save(MODEL_PATH)
+        logging.info("✅ Created and saved a new AI model (placeholder).")
+
+    return model
+
+model = load_or_train_model()
+
+
+# --- Data Fetching and Processing (Still needs improvement) ---
+
+def fetch_and_store_data(chain, txid, amount, fee, analyze=True):
+    """Fetches, stores, and optionally analyzes transaction data."""
+    try:
+        if analyze:
+            risk_score, risk_label = analyze_transaction(amount, fee)
+        else:
+            risk_score, risk_label = None, None
+
+        with sqlite3.connect(DATABASE_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO transactions (txid, chain, amount, fee, risk_score, risk_label, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(txid) DO NOTHING
+            ''', (txid, chain, amount, fee, risk_score, risk_label, int(time.time())))
+            conn.commit()
+            logging.info(f"Stored transaction data for {txid} ({chain})")
+    except Exception as e:
+        logging.error(f"Error fetching/storing data: {e}")
+
+def analyze_transaction(amount, fee):
+    """Analyzes a transaction and returns risk score and label."""
+    try:
+        risk_score = model.predict(np.array([[amount, fee]]))[0][0]
+        risk_label = "HIGH RISK" if risk_score > 0.7 else "LOW RISK"
+        return float(risk_score), risk_label # Ensure risk_score is float
+    except Exception as e:
+        logging.error(f"Error analyzing transaction: {e}")
+        return None, None
+
+# --- API Endpoints ---
+
+@app.route("/analyze", methods=["POST"])
+def analyze_endpoint():
+    try:
+        tx = request.json
+        if not all(key in tx for key in ["txid", "amount", "fee", "chain"]):
+            abort(400, description="Missing required transaction data (txid, amount, fee, chain).")
+
+        amount = float(tx['amount'])
+        fee = float(tx['fee'])
+        chain = tx['chain']
+        txid = tx['txid']
+
+        # Basic input validation
+        if amount < 0 or fee < 0:
+            abort(400, description="Amount and fee must be non-negative.")
+
+        risk_score, risk_label = analyze_transaction(amount, fee)
+
+        # Store ALL transaction (even low risk).
+        fetch_and_store_data(chain, txid, amount, fee, analyze=False) # Store, but don't re-analyze.
+
+        if risk_score is not None and risk_label: # Ensure analysis succeeded
+          return jsonify({"txid": txid, "chain": chain, "risk": risk_label, "risk_score": risk_score})
+        else:
+          abort(500, description="AI analysis failed.")
+
+
+    except ValueError:
+        abort(400, description="Invalid amount or fee.  Must be numeric.")
+    except Exception as e:
+        abort(500, description=f"Internal Server Error: {str(e)}")
+
+
+@app.route("/transactions", methods=["GET"])
+def get_transactions():
+    try:
+        with sqlite3.connect(DATABASE_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM transactions ORDER BY timestamp DESC")
+            transactions = cursor.fetchall()
+
+            columns = [col[0] for col in cursor.description]
+            transaction_list = [dict(zip(columns, row)) for row in transactions]
+
+            return jsonify(transaction_list)
+    except Exception as e:
+        abort(500, description=f"Internal Server Error: {str(e)}")
+
+@app.route("/mempool-size", methods=["GET"])
+def get_mempool_size():
+    try:
+        #  Example: Fetch mempool size from mempool.space (Bitcoin)
+        url = "https://mempool.space/api/mempool"
+        response = requests.get(url)
+        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+        mempool_info = response.json()
+        mempool_size = mempool_info['count']
+        return jsonify({"mempoolSize": mempool_size})
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error fetching mempool size: {e}")
+        abort(500, description=f"Error fetching mempool size: {e}")
+    except Exception as e:
+        abort(500, description=f"Internal Server Error: {str(e)}")
+
+@app.errorhandler(400)
+def bad_request(error):
+    return jsonify({'error': 'Bad Request', 'message': error.description}), 400
+
+@app.errorhandler(500)
+def internal_error(error):
+    return jsonify({'error': 'Internal Server Error', 'message': error.description}), 500
+
+if __name__ == "__main__":
+    # Use a production server! (e.g., Gunicorn)
+    # app.run(host="0.0.0.0", port=5006, debug=True)
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=5006)
