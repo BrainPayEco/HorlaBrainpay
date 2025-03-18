@@ -1,0 +1,55 @@
+name: Fraud Detection & Security Monitoring
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '*/15 * * * *'  # Runs every 15 minutes
+  workflow_dispatch:
+
+jobs:
+  run-fraud-detection:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Fraud Detection Model
+        run: node fraudDetection.js
+
+      - name: Upload Logs to Database
+        run: node uploadLogs.js
+
+      - name: Security Audit & Blacklist Check
+        run: node securityAudit.js
+
+      - name: Deploy Updated Model (if needed)
+        if: success()
+        run: npm run deploy
+
+      - name: Send Notifications (Discord & Email)
+        run: node notifySecurityTeam.js
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          EMAIL_API_KEY: ${{ secrets.EMAIL_API_KEY }}
+
+  deploy-updates:
+    needs: run-fraud-detection
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+      - name: Deploy New Fraud Detection Updates
+        run: |
+          echo "🚀 Deploying latest fraud detection improvements..."
+          npm run deploy
