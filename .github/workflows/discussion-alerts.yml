@@ -1,0 +1,95 @@
+name: "Enhanced AI Moderation & Alerts"
+
+on:
+  discussion:
+    types: [created, edited]
+
+jobs:
+  moderate_and_alert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install transformers openai requests numpy pandas
+
+      - name: AI Moderation (Fraud Detection)
+        id: moderate
+        run: |
+          import os
+          import openai
+          import requests
+          import json
+
+          discussion_title = "${{ github.event.discussion.title }}"
+          discussion_body = "${{ github.event.discussion.body }}"
+
+          openai.api_key = "${{ secrets.OPENAI_API_KEY }}"
+          prompt = f"Analyze this GitHub discussion for fraud or spam risk:\n\nTitle: {discussion_title}\nContent: {discussion_body}\n\nIs this fraudulent or spam? (Yes/No and reason)"
+
+          response = openai.ChatCompletion.create(
+              model="gpt-4",
+              messages=[{"role": "user", "content": prompt}]
+          )
+
+          ai_result = response['choices'][0]['message']['content'].strip().lower()
+          flagged = "yes" in ai_result
+
+          print(f"AI Moderation Result: {ai_result}")
+
+          if flagged:
+              print("🚨 Discussion flagged for review.")
+              with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+                  env_file.write(f"FLAGGED_DISCUSSION=true\n")
+          else:
+              with open(os.environ['GITHUB_ENV'], 'a') as env_file:
+                  env_file.write(f"FLAGGED_DISCUSSION=false\n")
+
+      - name: Store in Database
+        run: |
+          import requests
+          import json
+
+          DATABASE_API_URL = "${{ secrets.DATABASE_API_URL }}"
+          discussion_data = {
+              "title": "${{ github.event.discussion.title }}",
+              "body": "${{ github.event.discussion.body }}",
+              "user": "${{ github.event.discussion.user.login }}",
+              "timestamp": "${{ github.event.discussion.created_at }}",
+              "status": "flagged" if env.FLAGGED_DISCUSSION == "true" else "safe"
+          }
+
+          requests.post(DATABASE_API_URL, json=discussion_data)
+
+      - name: Send Telegram & Discord Alerts
+        if: env.FLAGGED_DISCUSSION == 'false'
+        run: |
+          import requests
+
+          TELEGRAM_BOT_TOKEN = "${{ secrets.TELEGRAM_BOT_TOKEN }}"
+          TELEGRAM_CHAT_ID = "${{ secrets.TELEGRAM_CHAT_ID }}"
+          DISCORD_WEBHOOK_URL = "${{ secrets.DISCORD_WEBHOOK }}"
+
+          message = f"📢 New GitHub Discussion Started!\n🗂 **Title:** {discussion_title}\n🔗 [View Discussion](${{ github.event.discussion.html_url }})"
+
+          requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", data={"chat_id": TELEGRAM_CHAT_ID, "text": message})
+          requests.post(DISCORD_WEBHOOK_URL, json={"content": message})
+
+      - name: Alert Moderators for Flagged Discussions
+        if: env.FLAGGED_DISCUSSION == 'true'
+        run: |
+          import requests
+
+          MODERATOR_DISCORD_WEBHOOK = "${{ secrets.MODERATOR_DISCORD_WEBHOOK }}"
+          MODERATOR_TELEGRAM_CHAT_ID = "${{ secrets.MODERATOR_TELEGRAM_CHAT_ID }}"
+
+          alert_message = f"🚨 **Suspicious Discussion Detected!** 🚨\n🗂 **Title:** {discussion_title}\n⚠️ AI Flagged as Fraud/Spam\n🔗 [Review Discussion](${{ github.event.discussion.html_url }})"
+
+          requests.post(MODERATOR_DISCORD_WEBHOOK, json={"content": alert_message})
+          requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage", data={"chat_id": MODERATOR_TELEGRAM_CHAT_ID, "text": alert_message})
