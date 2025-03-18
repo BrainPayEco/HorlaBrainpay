@@ -1,0 +1,14 @@
+import pandas as pd
+
+def analyze_user_behavior():
+    df = pd.read_csv("moderation_logs.csv")  # Load discussion logs
+
+    # Detect users with frequent flagged discussions
+    flagged_users = df[df["status"] == "flagged"]["user"].value_counts()
+    suspicious_users = flagged_users[flagged_users > 3].index.tolist()
+
+    print(f"🚨 Suspicious Users Detected: {suspicious_users}")
+
+    return suspicious_users
+
+analyze_user_behavior()
