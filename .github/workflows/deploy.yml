@@ -1,0 +1,26 @@
+name: Deploy Fraud Detection AI
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install Python Dependencies
+        uses: actions/setup-python@v3
+        with:
+          python-version: "3.9"
+      - run: pip install -r requirements.txt
+
+      - name: Deploy AI Fraud API
+        run: nohup python fraud_detection.py &
+
+      - name: Deploy Public API
+        run: nohup python public_api.py &
