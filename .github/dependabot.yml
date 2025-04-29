@@ -8,6 +8,13 @@ updates:
     commit-message:
       prefix: "deps(npm):"
       include: "scope"
+    labels:
+      - "dependencies"
+      - "javascript"
+    open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: "lodash"
+        versions: ["<4.17.21"]
 
   # ✅ Monitor Python dependencies (requirements.txt)
   - package-ecosystem: "pip"
@@ -17,6 +24,13 @@ updates:
     commit-message:
       prefix: "deps(pip):"
       include: "scope"
+    labels:
+      - "dependencies"
+      - "python"
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "requests"
+        versions: [">=3.0.0"]
 
   # ✅ Monitor Docker image updates
   - package-ecosystem: "docker"
@@ -26,6 +40,12 @@ updates:
     commit-message:
       prefix: "deps(docker):"
       include: "scope"
+    labels:
+      - "dependencies"
+      - "docker"
+    ignore:
+      - dependency-name: "node"
+        versions: ["<16"]
 
   # ✅ Monitor GitHub Actions workflows
   - package-ecosystem: "github-actions"
@@ -35,3 +55,32 @@ updates:
     commit-message:
       prefix: "deps(actions):"
       include: "scope"
+    labels:
+      - "dependencies"
+      - "ci/cd"
+    open-pull-requests-limit: 3
+
+  # ✅ Security updates (Prioritize security patches)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    labels:
+      - "security"
+    allow:
+      - dependency-type: "direct"
+    ignore:
+      - dependency-name: "express"
+        versions: ["<5.0.0"]
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    labels:
+      - "security"
+    allow:
+      - dependency-type: "direct"
+    ignore:
+      - dependency-name: "flask"
+        versions: [">=3.0.0"]
