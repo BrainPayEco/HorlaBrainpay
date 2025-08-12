@@ -20,7 +20,7 @@ jobs:
         echo "ACTIONS_STEP_DEBUG=true" >> $GITHUB_ENV
 
     - name: Checkout Repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Set up Python
       uses: actions/setup-python@v3
